@@ -1,0 +1,82 @@
+import objc
+from AppKit import NSWorkspace
+from ApplicationServices import (
+    AXUIElementCreateApplication, AXUIElementCopyAttributeValue,
+    kAXWindowsAttribute, kAXChildrenAttribute, kAXRoleAttribute, kAXTitleAttribute,
+    kAXDescriptionAttribute, kAXValueAttribute, kAXHelpAttribute, kAXIdentifierAttribute
+)
+
+def get_running_apps():
+    workspace = NSWorkspace.sharedWorkspace()
+    apps = workspace.runningApplications()
+    return {app.localizedName(): app.processIdentifier() for app in apps}
+
+def list_buttons(app_name):
+    apps = get_running_apps()
+    if app_name not in apps:
+        print(f"Application '{app_name}' is not running.")
+        return
+
+    pid = apps[app_name]
+    ax_app = AXUIElementCreateApplication(pid)
+    ax_windows = get_attribute(ax_app, kAXWindowsAttribute)
+
+    if not ax_windows:
+        print("No windows found for the application.")
+        return
+
+    for window in ax_windows:
+        print(f"Inspecting window: {window}")
+        ax_children = get_attribute(window, kAXChildrenAttribute)
+        for child in ax_children:
+            inspect_element(child, level=1)
+
+def get_attribute(element, attribute):
+    value = objc.nil
+    result, value = AXUIElementCopyAttributeValue(element, attribute, None)
+    if result != 0 or not value:
+        return []
+    return value
+
+def inspect_element(element, level=0):
+    indent = "  " * level
+    role = get_attribute(element, kAXRoleAttribute)
+    title = get_attribute(element, kAXTitleAttribute)
+    description = get_attribute(element, kAXDescriptionAttribute)
+    value = get_attribute(element, kAXValueAttribute)
+    help_text = get_attribute(element, kAXHelpAttribute)
+    identifier = get_attribute(element, kAXIdentifierAttribute)
+
+    print(f"{indent}Element: {element}")
+    print(f"{indent}  Role: {role}")
+    print(f"{indent}  Title: {title}")
+    print(f"{indent}  Description: {description}")
+    print(f"{indent}  Value: {value}")
+    print(f"{indent}  Help: {help_text}")
+    print(f"{indent}  Identifier: {identifier}")
+
+    if role == "AXButton":
+        print(f"{indent}  Found a button with title: {title}")
+
+    children = get_attribute(element, kAXChildrenAttribute)
+    for child in children:
+        inspect_element(child, level + 1)
+
+if __name__ == "__main__":
+    running_apps = get_running_apps()
+    app_names = list(running_apps.keys())
+
+    print("Running Applications:")
+    for idx, app_name in enumerate(app_names, 1):
+        print(f"{idx}. {app_name}")
+
+    try:
+        app_number = int(input("Enter the number of the application: ")) - 1
+        if 0 <= app_number < len(app_names):
+            selected_app = app_names[app_number]
+            print(f"Selected Application: {selected_app}")
+            list_buttons(selected_app)
+        else:
+            print("Invalid application number.")
+    except ValueError:
+        print("Invalid input. Please enter a number.")
